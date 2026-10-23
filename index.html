@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#091A36">
+<meta name="color-scheme" content="light dark">
+<title>کلاس زبان ۲۲۷</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="cube-stage" aria-hidden="true">
+      <div class="cube"><i>🗣️</i><i>🎧</i><i>📖</i><i>✍️</i><i>🌍</i><i>⭐</i></div>
+    </div>
+    <div class="hero-top">
+      <span class="logo-chip">🗣️ English Class</span>
+      <button class="btn small light" id="openAdmin">🔐 پنل مدیریت</button>
+    </div>
+    <h1 class="title" id="siteTitle">زبان <span>۲۲۷</span></h1>
+    <p class="sub" id="siteSub"></p>
+    <div class="theme-row">
+      <button class="theme-toggle" id="themeToggle" role="switch" aria-checked="false" aria-label="تم">
+        <canvas id="stage" aria-hidden="true"></canvas>
+        <span class="knob" aria-hidden="true">
+          <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="#F2A33A" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.5" fill="#F2A33A"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>
+          <svg class="moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z" fill="#cfd9ff"/></svg>
+        </span>
+      </button>
+      <span>تم روشن / تیره</span>
+    </div>
+  </header>
+
+  <div id="pinned"></div>
+  <section class="card next-card tilt" id="nextClass" hidden></section>
+  <div id="banner"></div>
+
+  <section class="card clock-card tilt" aria-label="ساعت تهران">
+    <svg id="spiderClock" viewBox="0 0 400 400" role="img" aria-label="ساعت عنکبوتی به وقت تهران"></svg>
+    <div class="clock" id="clock">--:--:--</div>
+    <div class="today-date" id="todayDate"></div>
+    <span class="tz">🕒 به وقت تهران</span>
+  </section>
+
+  <section class="rubika" id="rubikaBox">
+    <a class="btn block" id="rubikaBtn" href="#" target="_blank" rel="noopener">💬 ورود به گروه روبیکای کلاس</a>
+  </section>
+
+  <section class="card tilt" aria-label="امروز و فردا">
+    <h2>🗓️ برنامهٔ پیش رو</h2>
+    <div class="tabs" role="tablist" id="dayTabs">
+      <button class="tab" role="tab" data-d="0" aria-selected="false">امروز</button>
+      <button class="tab" role="tab" data-d="1" aria-selected="true">فردا</button>
+    </div>
+    <div id="dayInfo"></div>
+  </section>
+
+  <section class="card tilt" aria-label="تقویم">
+    <div class="cal-head">
+      <button class="btn icon-btn light" id="nextM" aria-label="ماه بعد">›</button>
+      <div class="cal-title" id="calTitle"></div>
+      <button class="btn icon-btn light" id="prevM" aria-label="ماه قبل">‹</button>
+    </div>
+    <div class="dow" id="dow"></div>
+    <div class="grid" id="grid"></div>
+    <div class="legend" id="legend"></div>
+    <div class="actions"><button class="btn small slate" id="goToday">📍 برو به امروز</button></div>
+  </section>
+
+  <section class="card tilt" aria-label="موارد پیش رو">
+    <h2>⏳ موارد پیش رو</h2>
+    <div id="upcoming"></div>
+  </section>
+
+  <footer>ساخته‌شده با ❤️ برای کلاس زبان ۲۲۷</footer>
+</div>
+
+<!-- جزئیات روز -->
+<div class="overlay" id="dayOverlay">
+  <div class="sheet" role="dialog" aria-modal="true">
+    <div class="sheet-head"><h3 id="dayTitle"></h3><button class="btn small light" data-close>✕ بستن</button></div>
+    <div id="dayBody"></div>
+  </div>
+</div>
+
+<!-- ورود مدیر -->
+<div class="overlay" id="loginOverlay">
+  <div class="sheet" role="dialog" aria-modal="true">
+    <div class="sheet-head"><h3>🔐 ورود مدیران</h3><button class="btn small light" data-close>✕ بستن</button></div>
+    <form id="loginForm" autocomplete="off">
+      <div class="field"><label for="pass">رمز عبور</label>
+        <input class="input" id="pass" type="password" inputmode="text" dir="ltr" autocomplete="current-password" placeholder="••••••"></div>
+      <p class="msg-err" id="loginErr"></p>
+      <button class="btn block" type="submit">ورود</button>
+    </form>
+  </div>
+</div>
+
+<!-- پنل مدیریت -->
+<div class="overlay" id="adminOverlay">
+  <div class="sheet admin-sheet" role="dialog" aria-modal="true">
+    <div class="sheet-head">
+      <h3>🛠️ پنل مدیریت</h3>
+      <div class="actions" style="margin:0">
+        <button class="btn small light" id="logout">خروج</button>
+        <button class="btn small" data-close>✕ بستن</button>
+      </div>
+    </div>
+    <div class="tabs" id="adminTabs" role="tablist"></div>
+    <div id="adminBody"></div>
+  </div>
+</div>
+
+<!-- نمرات (برای دانش‌آموز و والدین) -->
+<div class="overlay" id="gradesOverlay">
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="نمرات">
+    <div class="sheet-head"><h3>🏅 نمرات کلاس زبان ۲۲۷</h3><button class="btn small light" data-close>✕ بستن</button></div>
+    <div class="sec-title" style="margin-top:0">اسم دانش‌آموز را انتخاب کن</div>
+    <div class="chips" id="gChips"></div>
+    <div id="gResult"></div>
+  </div>
+</div>
+
+<button class="fab" id="fab" type="button" aria-label="دیدن نمرات"><span class="fab-ic">🏅</span><span>نمرات</span></button>
+
+<div class="toast" id="toast"></div>
+
+<script src="assets/config.js"></script>
+<script src="assets/data.js"></script>
+<script src="assets/theme.js"></script>
+<script src="assets/spiderclock.js"></script>
+<script src="assets/jalali.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>
