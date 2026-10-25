@@ -444,11 +444,11 @@
 
   function renderAdmin() {
     var tabs = clear($('adminTabs'));
-    TYPE_KEYS.concat(['schedule', 'grades']).forEach(function (k) {
+    TYPE_KEYS.concat(['schedule', 'grades', 'vocab']).forEach(function (k) {
       tabs.appendChild(h('button', {
         class: 'tab', role: 'tab', 'aria-selected': String(state.adminTab === k),
         onclick: function () { state.adminTab = k; state.editing = null; renderAdmin(); }
-      }, k === 'schedule' ? '🕘 برنامه کلاسی' : k === 'grades' ? '🏅 نمرات' : TYPES[k].icon + ' ' + TYPES[k].plural));
+      }, k === 'schedule' ? '🕘 برنامه کلاسی' : k === 'grades' ? '🏅 نمرات' : k === 'vocab' ? '📚 لغت‌ها' : TYPES[k].icon + ' ' + TYPES[k].plural));
     });
     var body = clear($('adminBody'));
     if (CFG.STATIC_MODE) {
@@ -466,6 +466,7 @@
     }
     if (state.adminTab === 'schedule') renderScheduleAdmin(body);
     else if (state.adminTab === 'grades') renderGradesAdmin(body);
+    else if (state.adminTab === 'vocab') renderVocabAdmin(body);
     else renderItemsAdmin(body, state.adminTab);
   }
 
@@ -734,13 +735,229 @@
     res.appendChild(list);
   }
 
-  $('fab').addEventListener('click', function () {
+  function openGrades() {
     openOv('gradesOverlay');
     clear($('gResult')); clear($('gChips')).appendChild(h('div', { class: 'empty', text: 'در حال بارگذاری…' }));
     loadPublicGrades().then(renderPublicGrades).catch(function () {
       clear($('gChips')).appendChild(h('div', { class: 'empty', text: 'نمرات بارگذاری نشد. اینترنت یا فیلترشکن را بررسی کن.' }));
     });
+  }
+
+  /* ---------- دکمهٔ شناور (منوی سریع) ---------- */
+  function fabToggle(open) {
+    var m = $('fabMenu'), b = $('fab');
+    if (open === undefined) open = m.hidden;
+    m.hidden = !open;
+    b.setAttribute('aria-expanded', String(open));
+    $('fabWrap').classList.toggle('open', open);
+  }
+  $('fab').addEventListener('click', function (e) { e.stopPropagation(); fabToggle(); });
+  document.addEventListener('click', function (e) { if (!$('fabWrap').contains(e.target)) fabToggle(false); });
+  $('fabGrades').addEventListener('click', function () { fabToggle(false); openGrades(); });
+  $('fabVocab').addEventListener('click', function () { fabToggle(false); openVocab(); });
+
+  /* ---------- لغت‌ها ---------- */
+  var LS_V = (CFG.STORAGE_KEY || 'sc') + '_vocab';
+  var V = { list: [], mode: 'cards', lesson: '', q: '', quiz: null };
+
+  function vLocalLoad() {
+    try { var x = JSON.parse(localStorage.getItem(LS_V) || 'null'); if (x) return x.list || []; } catch (e) {}
+    return window.VOCAB_DEMO || [];
+  }
+  function vLocalSave() { try { localStorage.setItem(LS_V, JSON.stringify({ list: V.list })); } catch (e) {} }
+  function loadVocab() {
+    if (useSB() && state.mode !== 'local') {
+      return sb('vocab?select=*&order=created_at.desc').then(function (r) {
+        V.list = (r || []).map(function (x) { return { id: x.id, word: x.word, lesson: x.lesson || '', definition: x.definition || '', synonym: x.synonym || '', meaning: x.meaning || '' }; });
+      });
+    }
+    V.list = vLocalLoad();
+    return Promise.resolve();
+  }
+  function saveWord(w) {
+    if (useSB() && state.mode !== 'local') return rpc('admin_save_word', { p: state.pass || '', w: w }).then(loadVocab);
+    var i = V.list.findIndex(function (x) { return x.id === w.id; });
+    if (i >= 0) V.list[i] = w; else V.list.unshift(w);
+    vLocalSave(); return Promise.resolve();
+  }
+  function deleteWord(id) {
+    if (useSB() && state.mode !== 'local') return rpc('admin_delete_word', { p: state.pass || '', wid: id }).then(loadVocab);
+    V.list = V.list.filter(function (x) { return x.id !== id; }); vLocalSave(); return Promise.resolve();
+  }
+  function ansOf(w) { return w.meaning || w.synonym || w.definition || ''; }
+  function speak(t) {
+    try { var u = new SpeechSynthesisUtterance(t); u.lang = 'en-US'; u.rate = 0.9; speechSynthesis.cancel(); speechSynthesis.speak(u); } catch (e) {}
+  }
+  function shuffle(arr) { var a2 = arr.slice(); for (var i = a2.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = a2[i]; a2[i] = a2[j]; a2[j] = t; } return a2; }
+
+  function openVocab() {
+    openOv('vocabOverlay');
+    clear($('vFilters')); clear($('vBody')).appendChild(h('div', { class: 'empty', text: 'در حال بارگذاری…' }));
+    loadVocab().then(renderVocab).catch(function () {
+      clear($('vBody')).appendChild(h('div', { class: 'empty', text: 'لغت‌ها بارگذاری نشد. اینترنت یا فیلترشکن را بررسی کن.' }));
+    });
+  }
+
+  function vFiltered(noSearch) {
+    var q = noSearch ? '' : V.q.trim().toLowerCase();
+    return V.list.filter(function (w) {
+      if (V.lesson && w.lesson !== V.lesson) return false;
+      if (!q) return true;
+      return (w.word + ' ' + w.meaning + ' ' + w.synonym + ' ' + w.definition).toLowerCase().indexOf(q) >= 0;
+    });
+  }
+
+  function renderVocab() {
+    Array.prototype.forEach.call(document.querySelectorAll('#vTabs .tab'), function (b) { b.setAttribute('aria-selected', String(b.dataset.m === V.mode)); });
+    var f = clear($('vFilters'));
+    var lessons = {}; V.list.forEach(function (w) { if (w.lesson) lessons[w.lesson] = 1; });
+    var keys = Object.keys(lessons);
+    if (V.mode === 'cards') {
+      var inp = h('input', { class: 'input', id: 'vsearch', type: 'search', placeholder: '🔎 جستجوی لغت…', value: V.q, 'aria-label': 'جستجو' });
+      inp.addEventListener('input', function () { V.q = inp.value; drawVocabBody(); });
+      f.appendChild(inp);
+    }
+    if (keys.length) {
+      var row = h('div', { class: 'vchips' });
+      [''].concat(keys).forEach(function (k) {
+        row.appendChild(h('button', { type: 'button', class: 'vchip' + (V.lesson === k ? ' on' : ''), onclick: function () { V.lesson = k; V.quiz = null; renderVocab(); } }, k || 'همه'));
+      });
+      f.appendChild(row);
+    }
+    drawVocabBody();
+  }
+
+  function drawVocabBody() {
+    var body = clear($('vBody'));
+    if (!V.list.length) { body.appendChild(h('div', { class: 'empty', text: 'هنوز لغتی ثبت نشده. معلم از پنل مدیریت لغت اضافه می‌کند 📚' })); return; }
+    if (V.mode === 'quiz') { drawQuiz(body); return; }
+    var list = vFiltered();
+    if (!list.length) { body.appendChild(h('div', { class: 'empty', text: 'لغتی پیدا نشد' })); return; }
+    body.appendChild(h('div', { class: 'm', style: 'color:var(--muted);margin:10px 2px', text: fa(list.length) + ' لغت • روی کارت بزن تا برگردد' }));
+    var grid = h('div', { class: 'flip-grid' });
+    list.forEach(function (w) {
+      var back = h('span', { class: 'face back' });
+      if (w.meaning) back.appendChild(h('span', { class: 'ln' }, h('b', { text: 'معنی' }), w.meaning));
+      if (w.synonym) back.appendChild(h('span', { class: 'ln' }, h('b', { text: 'Synonym' }), h('span', { dir: 'ltr', text: w.synonym })));
+      if (w.definition) back.appendChild(h('span', { class: 'ln' }, h('b', { text: 'Definition' }), h('span', { dir: 'ltr', text: w.definition })));
+      var spk = h('span', { class: 'spk', role: 'button', 'aria-label': 'تلفظ', tabindex: '-1', text: '🔊', onclick: function (e) { e.stopPropagation(); speak(w.word); } });
+      var card = h('button', { type: 'button', class: 'flip', 'aria-pressed': 'false', onclick: function () {
+        var on = card.classList.toggle('on'); card.setAttribute('aria-pressed', String(on));
+      } }, h('span', { class: 'flip-in' },
+        h('span', { class: 'face front' }, h('span', { class: 'w', dir: 'ltr', text: w.word }), w.lesson ? h('span', { class: 'ls', text: w.lesson }) : null, spk),
+        back));
+      grid.appendChild(card);
+    });
+    body.appendChild(grid);
+  }
+
+  function startQuiz() {
+    var pool = vFiltered(true).filter(function (w) { return ansOf(w); });
+    if (pool.length < 2) { V.quiz = { err: 'برای کوییز حداقل ۲ لغت لازم است' }; return; }
+    var qs = shuffle(pool).slice(0, 10).map(function (w) {
+      var others = shuffle(pool.filter(function (x) { return x.id !== w.id && ansOf(x) !== ansOf(w); }));
+      var seen = {}, opts = [{ t: ansOf(w), ok: true }];
+      seen[ansOf(w)] = 1;
+      others.forEach(function (x) { if (opts.length < 4 && !seen[ansOf(x)]) { seen[ansOf(x)] = 1; opts.push({ t: ansOf(x), ok: false }); } });
+      return { w: w, opts: shuffle(opts) };
+    });
+    V.quiz = { qs: qs, i: 0, score: 0, picked: null };
+  }
+
+  function drawQuiz(body) {
+    if (!V.quiz) startQuiz();
+    var Q = V.quiz;
+    if (Q.err) { body.appendChild(h('div', { class: 'empty', text: Q.err })); return; }
+    if (Q.i >= Q.qs.length) {
+      var pct = Q.score / Q.qs.length;
+      body.appendChild(h('div', { class: 'g-hero', style: 'margin-top:14px' },
+        h('div', { class: 'g-name', text: pct >= 0.8 ? 'عالی بود! 🎉' : pct >= 0.5 ? 'خوب بود 👍' : 'یه دور دیگه بزن 💪' }),
+        h('div', { class: 'g-big ' + pctClass(pct) }, fa(Q.score), h('small', { text: ' از ' + fa(Q.qs.length) })),
+        h('button', { class: 'btn', type: 'button', text: '🔁 دوباره', onclick: function () { V.quiz = null; drawVocabBody(); } })));
+      return;
+    }
+    var q = Q.qs[Q.i];
+    body.appendChild(h('div', { class: 'm', style: 'color:var(--muted);margin:10px 2px', text: 'سؤال ' + fa(Q.i + 1) + ' از ' + fa(Q.qs.length) + ' • امتیاز ' + fa(Q.score) }));
+    body.appendChild(h('div', { class: 'q-word' },
+      h('span', { dir: 'ltr', text: q.w.word }),
+      h('span', { class: 'spk', role: 'button', 'aria-label': 'تلفظ', text: '🔊', onclick: function () { speak(q.w.word); } })));
+    var opts = h('div', { class: 'q-opts' });
+    q.opts.forEach(function (o, idx) {
+      var cls = 'q-opt';
+      if (Q.picked !== null) cls += o.ok ? ' ok' : (Q.picked === idx ? ' bad' : '');
+      var ob = h('button', { type: 'button', class: cls, onclick: function () {
+        if (Q.picked !== null) return;
+        Q.picked = idx; if (o.ok) Q.score++;
+        drawVocabBody();
+      } }, o.t);
+      if (Q.picked !== null) ob.setAttribute('disabled', '');
+      opts.appendChild(ob);
+    });
+    body.appendChild(opts);
+    if (Q.picked !== null) body.appendChild(h('div', { class: 'actions', style: 'margin-top:14px' },
+      h('button', { class: 'btn green', type: 'button', text: Q.i + 1 >= Q.qs.length ? '🏁 نتیجه' : 'بعدی ←', onclick: function () { Q.i++; Q.picked = null; drawVocabBody(); } })));
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('#vTabs .tab'), function (b) {
+    b.addEventListener('click', function () { V.mode = b.dataset.m; V.quiz = null; renderVocab(); });
   });
+
+  /* پنل معلم: لغت‌ها */
+  state.wEdit = null;
+  function renderVocabAdmin(body) {
+    body.appendChild(h('div', { class: 'empty', text: 'در حال بارگذاری…' }));
+    loadVocab().then(function () { if (state.adminTab !== 'vocab') return; clear(body); drawVocabAdmin(body); })
+      .catch(function (e) { clear(body); body.appendChild(h('div', { class: 'msg-err', text: 'لغت‌ها بارگذاری نشد' })); adminError(e); });
+  }
+  function drawVocabAdmin(body) {
+    var ed = state.wEdit;
+    var word = h('input', { class: 'input', id: 'vword', dir: 'ltr', maxlength: '80', placeholder: 'Word (e.g. reluctant)', autocapitalize: 'none' });
+    var lesson = h('input', { class: 'input', id: 'vlesson', maxlength: '40', placeholder: 'مثلاً: Lesson B (اختیاری)', list: 'vlessons' });
+    var dl = h('datalist', { id: 'vlessons' }); var ls = {}; V.list.forEach(function (w) { if (w.lesson) ls[w.lesson] = 1; });
+    Object.keys(ls).forEach(function (k) { dl.appendChild(h('option', { value: k })); });
+    var def = h('textarea', { class: 'input', id: 'vdef', dir: 'ltr', maxlength: '300', placeholder: 'Definition: توضیح انگلیسی (اختیاری)' });
+    var syn = h('input', { class: 'input', id: 'vsyn', dir: 'ltr', maxlength: '150', placeholder: 'Synonym: مترادف (اختیاری)' });
+    var mean = h('input', { class: 'input', id: 'vmean', maxlength: '150', placeholder: 'معنی فارسی (اختیاری)' });
+    if (ed) { word.value = ed.word; lesson.value = ed.lesson; def.value = ed.definition; syn.value = ed.synonym; mean.value = ed.meaning; }
+    var err = h('p', { class: 'msg-err' });
+    var saveBtn = h('button', { class: 'btn green', type: 'submit', text: ed ? '💾 ذخیرهٔ تغییر' : '➕ افزودن لغت' });
+    var form = h('form', { class: 'form-card', onsubmit: function (e) {
+      e.preventDefault();
+      var w = { id: ed ? ed.id : newId(), word: word.value.trim(), lesson: lesson.value.trim(), definition: def.value.trim(), synonym: syn.value.trim(), meaning: mean.value.trim() };
+      if (!w.word) { err.textContent = 'لغت انگلیسی را بنویس'; return; }
+      if (!w.definition && !w.synonym && !w.meaning) { err.textContent = 'حداقل یکی از این‌ها را پر کن: Definition، Synonym یا معنی فارسی'; return; }
+      saveBtn.setAttribute('disabled', ''); err.textContent = '';
+      saveWord(w).then(function () { state.wEdit = null; toast('لغت ذخیره شد ✅'); renderAdmin(); })
+        .catch(function (e2) { saveBtn.removeAttribute('disabled'); adminError(e2); });
+    } },
+      h('div', { class: 'sec-title', style: 'margin-top:0', text: ed ? '✏️ ویرایش لغت' : '📚 لغت جدید' }),
+      h('div', { class: 'field' }, h('label', { for: 'vword', text: 'لغت انگلیسی' }), word),
+      h('div', { class: 'field' }, h('label', { for: 'vlesson', text: 'درس' }), lesson, dl),
+      h('div', { class: 'field' }, h('label', { for: 'vdef', text: 'Definition (توضیح)' }), def),
+      h('div', { class: 'field' }, h('label', { for: 'vsyn', text: 'Synonym (مترادف)' }), syn),
+      h('div', { class: 'field' }, h('label', { for: 'vmean', text: 'معنی فارسی' }), mean),
+      h('div', { class: 'm', style: 'color:var(--muted);margin-bottom:6px', text: 'هر کدام را که خواستی بنویس؛ حداقل یکی لازم است.' }),
+      err,
+      h('div', { class: 'actions' }, saveBtn, ed ? h('button', { class: 'btn light', type: 'button', text: 'انصراف', onclick: function () { state.wEdit = null; renderAdmin(); } }) : null));
+    body.appendChild(form);
+    body.appendChild(h('div', { class: 'sec-title', text: '📋 لغت‌های ثبت‌شده (' + fa(V.list.length) + ')' }));
+    var list = h('div', { class: 'list' });
+    if (!V.list.length) list.appendChild(h('div', { class: 'empty', text: 'هنوز لغتی ثبت نشده' }));
+    V.list.forEach(function (w) {
+      list.appendChild(h('div', { class: 'item vocab' },
+        h('div', { class: 'ic', text: '📚' }),
+        h('div', { class: 'body' },
+          h('div', { class: 't', dir: 'ltr', style: 'text-align:start', text: w.word }),
+          h('div', { class: 'm', text: [w.lesson, ansOf(w)].filter(Boolean).join(' • ') })),
+        h('div', { class: 'tools' },
+          h('button', { class: 'btn small light', type: 'button', text: '✏️', 'aria-label': 'ویرایش', onclick: function () { state.wEdit = w; renderAdmin(); document.querySelector('.admin-sheet').scrollTop = 0; } }),
+          h('button', { class: 'btn small red', type: 'button', text: '🗑️', 'aria-label': 'حذف', onclick: function () {
+            if (!confirm('«' + w.word + '» حذف شود؟')) return;
+            deleteWord(w.id).then(function () { toast('حذف شد'); renderAdmin(); }).catch(adminError);
+          } }))));
+    });
+    body.appendChild(list);
+  }
 
   function renderScheduleAdmin(body) {
     var draft = JSON.parse(JSON.stringify(state.data.schedule || {}));

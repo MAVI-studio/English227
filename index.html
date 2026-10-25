@@ -126,7 +126,26 @@
   </div>
 </div>
 
-<button class="fab" id="fab" type="button" aria-label="دیدن نمرات"><span class="fab-ic">🏅</span><span>نمرات</span></button>
+<div class="fab-wrap" id="fabWrap">
+  <div class="fab-menu" id="fabMenu" hidden>
+    <button class="fab-item" id="fabVocab" type="button"><span>📚</span> لغت‌ها</button>
+    <button class="fab-item" id="fabGrades" type="button"><span>🏅</span> نمرات</button>
+  </div>
+  <button class="fab" id="fab" type="button" aria-label="باز کردن منوی لغت‌ها و نمرات" aria-expanded="false"><span class="fab-plus">＋</span></button>
+</div>
+
+<!-- لغت‌ها -->
+<div class="overlay" id="vocabOverlay">
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="لغت‌ها">
+    <div class="sheet-head"><h3>📚 لغت‌های کلاس ۲۲۷</h3><button class="btn small light" data-close>✕ بستن</button></div>
+    <div class="tabs" id="vTabs" role="tablist">
+      <button class="tab" role="tab" data-m="cards" aria-selected="true">🃏 کارت‌ها</button>
+      <button class="tab" role="tab" data-m="quiz" aria-selected="false">🎯 کوییز</button>
+    </div>
+    <div id="vFilters"></div>
+    <div id="vBody"></div>
+  </div>
+</div>
 
 <div class="toast" id="toast"></div>
 

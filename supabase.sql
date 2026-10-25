@@ -14,3 +14,11 @@ begin
   if not private.check_pw(p) then raise exception 'unauthorized' using errcode = '28000'; end if;
   delete from public.grades where id = gid;
 end $$;
+
+-- حذف لغت (برای دکمهٔ 🗑️ در تب لغت‌ها):
+create or replace function public.admin_delete_word(p text, wid text) returns void
+language plpgsql security definer set search_path = '' as $$
+begin
+  if not private.check_pw(p) then raise exception 'unauthorized' using errcode = '28000'; end if;
+  delete from public.vocab where id = wid;
+end $$;
